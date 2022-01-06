@@ -1,3 +1,8 @@
+/-
+Copyright (c) 2022 Markus Himmel. All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Markus Himmel
+-/
 import tactic
 
 universes u v
@@ -62,7 +67,7 @@ begin
   exact lt_irrefl _ ((hx' (f (n + 1)) (set.mem_range_self _)).trans_lt (hf n))
 end
 
-lemma well_ordered_induction [well_order α] (P : α → Prop) (hP : ∀ x, (∀ y, y < x → P y) → P x) : ∀ x, P x :=
+theorem well_ordered_induction [well_order α] (P : α → Prop) (hP : ∀ x, (∀ y, y < x → P y) → P x) : ∀ x, P x :=
 begin
   by_contradiction,
   push_neg at h,
