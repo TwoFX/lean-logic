@@ -228,10 +228,10 @@ begin
       cases consistent_or_consistent_not hS'₂ p,
       { suffices : S' ∪ {p} = S',
         { rw ←this, left, simp only [set.mem_insert_iff, true_or, eq_self_iff_true, set.union_singleton] },
-        refine hS'₄ _ ⟨set.subset_union_of_subset_left hS'₃ _, h⟩ (set.subset_union_left _ _) },
+        exact hS'₄ _ ⟨set.subset_union_of_subset_left hS'₃ _, h⟩ (set.subset_union_left _ _) },
       { suffices : S' ∪ {¬'p} = S',
         { rw ←this, right, simp only [set.mem_insert_iff, true_or, eq_self_iff_true, and_self, set.union_singleton] },
-        refine hS'₄ _ ⟨set.subset_union_of_subset_left hS'₃ _, h⟩ (set.subset_union_left _ _) } },
+        exact hS'₄ _ ⟨set.subset_union_of_subset_left hS'₃ _, h⟩ (set.subset_union_left _ _) } },
     refine ⟨S', ⟨hS'₃, hS'₂, λ p hp, _, hS⟩⟩,
     { cases hS p,
       { exact h },
@@ -343,5 +343,5 @@ begin
   { rcases hS₁ with ⟨S₁, hS₁S, hS₁, hS₁qr⟩,
     rcases hS₂ with ⟨S₂, hS₂S, hS₂, hS₂q⟩,
     refine ⟨S₁ ∪ S₂, set.union_subset hS₁S hS₂S, set.finite.union hS₁ hS₂, _⟩,
-    refine proves.modus_ponens (proves.subset (set.subset_union_left _ _) hS₁qr) (proves.subset (set.subset_union_right _ _) hS₂q) }
+    exact proves.modus_ponens (proves.subset (set.subset_union_left _ _) hS₁qr) (proves.subset (set.subset_union_right _ _) hS₂q) }
 end

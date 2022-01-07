@@ -5,6 +5,9 @@ Authors: Markus Himmel
 -/
 import tactic
 
+open_locale classical
+noncomputable theory
+
 universes u v
 
 namespace my
@@ -62,8 +65,7 @@ def well_order_of_is_artinian [linear_order α] (h : artinian α) : well_order �
 lemma is_artinian [well_order α] : artinian α :=
 begin
   rintro ⟨f, hf⟩,
-  obtain ⟨x, ⟨n, hn⟩, hx'⟩ := exists_min (set.range f) (set.range_nonempty f),
-  subst hn,
+  obtain ⟨x, ⟨n, rfl⟩, hx'⟩ := exists_min (set.range f) (set.range_nonempty f),
   exact lt_irrefl _ ((hx' (f (n + 1)) (set.mem_range_self _)).trans_lt (hf n))
 end
 
@@ -99,5 +101,83 @@ instance subsingleton_order_iso [well_order α] [well_order β] : subsingleton (
   (λ x hx, subsingleton_least_elements (f '' I x)ᶜ
     (iso_apply_least_element _ _)
     ((set.image_congr hx).symm ▸ iso_apply_least_element _ _))⟩
+
+def initial_segment [linear_order α] (Y : set α) : Prop :=
+∀ x ∈ Y, ∀ y < x, y ∈ Y
+
+lemma initial_segment_I [linear_order α] (x : α) : initial_segment (I x) :=
+λ y hy z hz, hz.trans hy
+
+lemma initial_segment_univ [linear_order α] (x : α) : initial_segment (set.univ : set α) :=
+by tidy
+
+lemma initial_segment_def [linear_order α] {Y : set α} (hY : initial_segment Y) {x y : α} (hx : x ∈ Y) (hy : y ≤ x) : y ∈ Y :=
+by { rcases eq_or_lt_of_le hy with (h|h), exacts [h.symm ▸ hx, hY _ hx _ h] }
+
+lemma initial_segment_eq [well_order α] {S : set α} (hS : initial_segment S) : S = set.univ ∨ ∃ x, S = I x :=
+begin
+  refine or_iff_not_imp_left.2 (λ h, _),
+  obtain ⟨x', hx'⟩ := (set.ne_univ_iff_exists_not_mem _).1 h,
+  obtain ⟨x, hx₁, hx₂⟩ := exists_min Sᶜ ⟨x', hx'⟩,
+  refine ⟨x, set.ext (λ y, ⟨λ hy, _, λ hy, _⟩)⟩,
+  { contrapose! hx₁,
+    exact not_not.2 (initial_segment_def hS hy (not_lt.1 hx₁)) },
+  { contrapose! hx₂,
+    exact ⟨y, hx₂, hy⟩ }
+end
+
+section recursion
+variables [well_order α] {G : Π (I : set α), (I → β) → β}
+
+section
+variables (G)
+
+structure attempt :=
+(to_fun : α → β)
+(J : set α)
+(hJ : initial_segment J)
+(hh : ∀ x ∈ J, to_fun x = G _ (set.restrict to_fun (I x)))
+
+end
+
+instance : has_coe_to_fun (attempt G) (λ _, α → β) := ⟨attempt.to_fun⟩
+
+lemma initial_segment_J (h : attempt G) : initial_segment h.J :=
+attempt.hJ _
+
+lemma attempt_eq (h : attempt G) {x : α} : x ∈ h.J → h x = G _ (set.restrict h (I x)) :=
+attempt.hh _ _
+
+lemma attempt_well_defined (h h' : attempt G) : ∀ (x : α) (hx : x ∈ h.J) (hx' : x ∈ h'.J), h x = h' x :=
+begin
+  refine well_ordered_induction _ (λ x hx hx₁ hx₂, _),
+  rw [attempt_eq _ hx₁, attempt_eq _ hx₂],
+  congr' 1,
+  exact funext (λ y, hx _ y.2 (initial_segment_J h _ hx₁ _ y.2) (initial_segment_J h' _ hx₂ _ y.2))
+end
+
+def assemble (J : set α) (hJ : initial_segment J) (data : Π x ∈ J, { h : attempt G // x ∈ h.J }) : attempt G :=
+{ to_fun := λ x, if h : x ∈ J then (data x h).1 x else G ∅ $ λ ⟨_, h⟩, false.elim h,
+  J := J,
+  hJ := hJ,
+  hh := λ x hx,
+  begin
+    simp only [hx, dif_pos, subtype.val_eq_coe],
+    rw attempt_eq ((data x hx) : attempt G) (data _ hx).2,
+    congr' 1,
+    ext y,
+    have hy : (y : α) ∈ J := hJ _ hx _ y.2,
+    simpa [hy] using attempt_well_defined _ _ _ (initial_segment_J _ _ (data _ hx).2 _ y.2) (data _ hy).2
+  end }
+
+lemma exists_attempt : ∀ x, ∃ (h : attempt G), x ∈ h.J :=
+begin
+  refine well_ordered_induction _ (λ x hx, _),
+
+end
+
+
+
+end recursion
 
 end my
