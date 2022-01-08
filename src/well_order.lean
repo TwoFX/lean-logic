@@ -80,12 +80,14 @@ begin
   exact ⟨z, hy', hz⟩
 end
 
-def I [has_lt α] (x : α) : set α :=
-{ y | y < x }
+def I [has_lt α] (x : α) : set α := { y | y < x }
+def J [has_le α] (x : α) : set α := { y | y ≤ x }
 
-@[simp]
-lemma mem_I [has_lt α] (x y : α) : x ∈ I y ↔ x < y :=
-iff.rfl
+@[simp] lemma mem_I [has_lt α] (x y : α) : x ∈ I y ↔ x < y := iff.rfl
+@[simp] lemma mem_J [has_le α] (x y : α) : x ∈ J y ↔ x ≤ y := iff.rfl
+
+lemma mem_J_iff [linear_order α] (x y : α) : x ∈ J y ↔ x = y ∨ x ∈ I y :=
+le_iff_eq_or_lt
 
 lemma iso_apply_least_element [linear_order α] [linear_order β] (f : α ≃o β) (x : α) : f x ∈ (f '' I x)ᶜ.least_elements :=
 begin
@@ -105,10 +107,16 @@ instance subsingleton_order_iso [well_order α] [well_order β] : subsingleton (
 def initial_segment [linear_order α] (Y : set α) : Prop :=
 ∀ x ∈ Y, ∀ y < x, y ∈ Y
 
+lemma I_subset_initial_segment [linear_order α] {Y : set α} (hY : initial_segment Y) : ∀ x ∈ Y, I x ⊆ Y :=
+λ x hx y hy, hY _ hx _ hy
+
 lemma initial_segment_I [linear_order α] (x : α) : initial_segment (I x) :=
 λ y hy z hz, hz.trans hy
 
-lemma initial_segment_univ [linear_order α] (x : α) : initial_segment (set.univ : set α) :=
+lemma initial_segment_J [linear_order α] (x : α) : initial_segment (J x) :=
+λ y hy z hz, le_of_lt $ hz.trans_le hy
+
+lemma initial_segment_univ [linear_order α] : initial_segment (set.univ : set α) :=
 by tidy
 
 lemma initial_segment_def [linear_order α] {Y : set α} (hY : initial_segment Y) {x y : α} (hx : x ∈ Y) (hy : y ≤ x) : y ∈ Y :=
@@ -127,57 +135,153 @@ begin
 end
 
 section recursion
-variables [well_order α] {G : Π (I : set α), (I → β) → β}
+variables [well_order α] {G : Π (x : α), (I x → β) → β}
 
 section
 variables (G)
 
 structure attempt :=
+(definition_set : set α)
+(initial_definition_set : initial_segment definition_set)
 (to_fun : α → β)
-(J : set α)
-(hJ : initial_segment J)
-(hh : ∀ x ∈ J, to_fun x = G _ (set.restrict to_fun (I x)))
+(hh : ∀ x ∈ definition_set, to_fun x = G _ (set.restrict to_fun (I x)))
 
 end
 
 instance : has_coe_to_fun (attempt G) (λ _, α → β) := ⟨attempt.to_fun⟩
 
-lemma initial_segment_J (h : attempt G) : initial_segment h.J :=
-attempt.hJ _
+namespace attempt
 
-lemma attempt_eq (h : attempt G) {x : α} : x ∈ h.J → h x = G _ (set.restrict h (I x)) :=
+lemma initial_segment_definition_set (h : attempt G) : initial_segment h.definition_set :=
+attempt.initial_definition_set _
+
+def defined_at (h : attempt G) (x : α) : Prop :=
+x ∈ h.definition_set
+
+lemma defined_at_iff (h : attempt G) {x : α} : h.defined_at x ↔ x ∈ h.definition_set :=
+iff.rfl
+
+lemma attempt_eq (h : attempt G) {x : α} : h.defined_at x → h x = G _ (set.restrict h (I x)) :=
 attempt.hh _ _
 
-lemma attempt_well_defined (h h' : attempt G) : ∀ (x : α) (hx : x ∈ h.J) (hx' : x ∈ h'.J), h x = h' x :=
+lemma attempt_well_defined (h h' : attempt G) : ∀ (x : α) (hx : h.defined_at x) (hx' : h'.defined_at x), h x = h' x :=
 begin
   refine well_ordered_induction _ (λ x hx hx₁ hx₂, _),
   rw [attempt_eq _ hx₁, attempt_eq _ hx₂],
   congr' 1,
-  exact funext (λ y, hx _ y.2 (initial_segment_J h _ hx₁ _ y.2) (initial_segment_J h' _ hx₂ _ y.2))
+  exact funext (λ y, hx _ y.2 (h.initial_segment_definition_set _ hx₁ _ y.2) (h'.initial_segment_definition_set _ hx₂ _ y.2))
 end
 
-def assemble (J : set α) (hJ : initial_segment J) (data : Π x ∈ J, { h : attempt G // x ∈ h.J }) : attempt G :=
-{ to_fun := λ x, if h : x ∈ J then (data x h).1 x else G ∅ $ λ ⟨_, h⟩, false.elim h,
-  J := J,
-  hJ := hJ,
-  hh := λ x hx,
-  begin
-    simp only [hx, dif_pos, subtype.val_eq_coe],
-    rw attempt_eq ((data x hx) : attempt G) (data _ hx).2,
-    congr' 1,
-    ext y,
-    have hy : (y : α) ∈ J := hJ _ hx _ y.2,
-    simpa [hy] using attempt_well_defined _ _ _ (initial_segment_J _ _ (data _ hx).2 _ y.2) (data _ hy).2
-  end }
+section
+variables (G)
+include G
 
-lemma exists_attempt : ∀ x, ∃ (h : attempt G), x ∈ h.J :=
+def attempt_defined_at (x : α) :=
+{ h : attempt G // h.defined_at x }
+
+lemma nonempty_β (x : α) : nonempty β :=
+begin
+  obtain ⟨m, hm, hm'⟩ := exists_min set.univ ⟨x, trivial⟩,
+  refine ⟨G m _⟩,
+  rintro ⟨y, hy⟩,
+  exact false.elim (lt_irrefl m ((hm' y trivial).trans_lt hy))
+end
+
+def any (x : α) : β :=
+classical.choice $ nonempty_β G x
+
+lemma exists_assemble (S : set α) (hS : initial_segment S) (hS' : ∀ x ∈ S, nonempty (attempt_defined_at G x)) :
+  ∃ h : attempt G, h.definition_set = S :=
+begin
+  have : ∀ x : S, ∃ h : attempt G, h.defined_at x,
+  { rintro ⟨x, hx⟩,
+    obtain ⟨h, hh⟩ := hS' x hx,
+    exact ⟨h, hh⟩ },
+  choose h hh using this,
+  refine ⟨⟨_, hS, λ x, if hx : x ∈ S then h ⟨x, hx⟩ x else any G x, λ x hx, _⟩, rfl⟩,
+  rw [dif_pos hx, attempt_eq (h ⟨x, hx⟩) _],
+  { congr' 1,
+    ext y,
+    have : (y : α) ∈ S := hS _ hx _ y.2,
+    simp only [this, dif_pos, set.restrict_apply],
+    exact attempt_well_defined _ _ _ (initial_segment_definition_set _ _ (hh _) _ y.2) (hh _) },
+  { exact hh _ }
+end
+
+
+lemma exists_extend (x : α) (h : ∃ h' : attempt G, h'.definition_set = I x) : ∃ h : attempt G, h.definition_set = J x :=
+begin
+  rcases h with ⟨h, hh⟩,
+  refine ⟨⟨_, initial_segment_J x, function.update h x (G _ (set.restrict h (I x))), _⟩, rfl⟩,
+  simp only [mem_J_iff, forall_eq_or_imp, function.update_same],
+  refine ⟨_, _⟩,
+  { congr' 1,
+    ext y,
+    rw [set.restrict_apply, set.restrict_apply, function.update_noteq (show (y : α) ≠ x, from ne_of_lt y.2)] },
+  { intros y hy,
+    rw [function.update_noteq (show (y : α) ≠ x, from ne_of_lt hy),
+      h.attempt_eq (h.defined_at_iff.2 (hh.symm ▸ hy : y ∈ h.definition_set))],
+    congr' 1,
+    ext z,
+    rw [set.restrict_apply, set.restrict_apply, function.update_noteq (show (z : α) ≠ x, from ne_of_lt (lt_trans z.2 hy))] }
+end
+
+lemma exists_attempt : ∀ x, nonempty (attempt_defined_at G x) :=
 begin
   refine well_ordered_induction _ (λ x hx, _),
+  obtain ⟨h, hh⟩ := exists_extend G x (exists_assemble G (I x) (initial_segment_I x) (λ y hy, hx _ hy)),
+  exact ⟨⟨h, h.defined_at_iff.2 (hh.symm ▸ (le_refl _ : x ∈ J x))⟩⟩
+end
 
 end
 
+end attempt
 
+variables (G)
+
+theorem recursion : ∃! f : α → β, ∀ x, f x = G x (set.restrict f _) :=
+begin
+  obtain ⟨f, hf⟩ := attempt.exists_assemble G set.univ initial_segment_univ (λ x hx, attempt.exists_attempt G x),
+  have hf : ∀ x, f x = G x (set.restrict f _) := λ x, f.attempt_eq (f.defined_at_iff.2 (hf.symm ▸ set.mem_univ x)),
+  refine ⟨f, ⟨hf, λ g hg, funext (well_ordered_induction _ (λ x hx, _))⟩⟩,
+  rw [hf x, hg x],
+  exact congr_arg _ (funext (λ y, hx _ y.2))
+end
 
 end recursion
+
+section subset_collapse
+
+instance well_order_set [well_order α] (S : set α) : well_order S :=
+{ exists_min :=
+   begin
+     rintros T ⟨t, ht⟩,
+     let T' := { x | ∃ (h : x ∈ S), (⟨x, h⟩ : S) ∈ T },
+     have hT' : T'.nonempty := ⟨t, ⟨t.2, _⟩⟩,
+     { obtain ⟨x, ⟨hx, hx'⟩, hx''⟩ := exists_min T' hT',
+       refine ⟨⟨x, hx⟩, hx', λ y hy, hx'' _ ⟨y.2, _⟩⟩,
+       simpa only [subtype.coe_eta, subtype.val_eq_coe] using hy },
+     { simpa only [subtype.coe_eta] using ht }
+   end,
+  ..(infer_instance : linear_order S)}
+
+theorem subset_collapse [well_order α] (Y : set α) : ∃! (S : set α), initial_segment S ∧ nonempty (Y ≃o S) :=
+begin
+  suffices : ∃! f : Y → α, ∀ (x : Y), f x ∈ (f '' I x)ᶜ.least_elements,
+  { rcases this with ⟨f, hf, hf'⟩,
+    refine ⟨set.range f, ⟨_, _⟩, _⟩,
+    { rintros x ⟨y, rfl⟩ z hz,
+      have := hf y,
+      simp [set.least_elements] at this,
+     }
+
+
+   },
+  { sorry,
+
+   }
+end
+
+end subset_collapse
 
 end my
