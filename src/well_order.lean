@@ -268,7 +268,50 @@ instance well_order_set [well_order α] (S : set α) : well_order S :=
    end,
   ..(infer_instance : linear_order S)}
 
-theorem subset_collapse [well_order α] (Y : set α) : ∃! (S : set α), initial_segment S ∧ nonempty (Y ≃o S) :=
+section
+variables (α β)
+
+def isomorphic_to_initial_segment [well_order α] [well_order β] : Prop :=
+∃ (S : set β), initial_segment S ∧ nonempty (α ≃o S)
+
+end
+
+local notation a ` ≺ `:70 b:70 := isomorphic_to_initial_segment a b
+
+lemma mem_least_elements [well_order α] [well_order β] {S : set β} (hS : initial_segment S) (f : α ≃o S) (x : α) :
+  (f x : β) ∈ ((subtype.val ∘ f) '' I x)ᶜ.least_elements :=
+begin
+  refine ⟨_, _⟩,
+  { rintro ⟨z, ⟨hz, hz'⟩⟩,
+    suffices : f z = f x,
+    { obtain rfl := (order_iso.apply_eq_iff_eq _).1 this,
+      exact lt_irrefl _ hz },
+    exact subtype.ext hz' },
+  { rintros y hy,
+    contrapose! hy,
+    simp only [set.mem_image, not_not, function.comp_app, mem_I, set.mem_compl_eq, subtype.val_eq_coe],
+    obtain ⟨z, hz⟩ := f.surjective ⟨y, hS _ (f x).2 _ hy⟩,
+    obtain rfl : (f z : β) = y := congr_arg subtype.val hz,
+    exact ⟨z, ⟨f.lt_iff_lt.1 hy, rfl⟩⟩ }
+end
+
+theorem subset_collapse_uniqueness [well_order α] [well_order β] (h : α ≺ β) :
+  ∃! (S : set β), initial_segment S ∧ nonempty (α ≃o S) :=
+begin
+  rcases h with ⟨S, ⟨hS, ⟨f⟩⟩⟩,
+  refine ⟨S, ⟨hS, ⟨f⟩⟩, _⟩,
+  rintro T ⟨hT, ⟨g⟩⟩,
+  suffices : ∀ x, (f x : β) = g x,
+  { have : subtype.val ∘ f = subtype.val ∘ g,
+    { ext, simp only [this, function.comp_app, subtype.val_eq_coe] },
+    rw [←@subtype.range_val _ T, ←g.surjective.range_comp, ←this, f.surjective.range_comp, subtype.range_val] },
+  refine well_ordered_induction _ (λ x hx, _),
+  have := mem_least_elements hS f x,
+  rw [(set.image_congr (λ y hy, hx _ hy) : (subtype.val ∘ f) '' I x = (subtype.val ∘ g) '' I x)] at this,
+  exact subsingleton_least_elements _ this (mem_least_elements hT g x)
+end
+
+theorem subset_collapse [well_order α] (Y : set α) : Y ≺ α :=
 begin
   suffices : ∃ f : Y → α, ∀ (x : Y), f x ∈ (f '' I x)ᶜ.least_elements,
   { rcases this with ⟨f, hf⟩,
@@ -278,39 +321,14 @@ begin
       { exact false.elim ((hf y).1 ⟨x, ⟨h, hxy⟩⟩) },
       { refl },
       { exact false.elim ((hf x).1 ⟨y, ⟨h, hxy.symm⟩⟩) } },
-    refine ⟨set.range f, ⟨_, _⟩, _⟩,
+    refine ⟨set.range f, ⟨_, _⟩⟩,
     { rintro x ⟨y, rfl⟩ z hz,
       have := (hf y).2 z,
       contrapose! this,
       exact ⟨λ h, this (set.mem_range_of_mem_image _ _ h), hz⟩ },
     { refine ⟨strict_mono.order_iso f (monotone.strict_mono_of_injective (λ x y hxy, (hf x).2 (f y) _) hfi)⟩,
       rintro ⟨z, ⟨hz, hz'⟩⟩,
-      exact lt_irrefl x (((hfi hz').symm ▸ hxy : x ≤ z).trans_lt hz) },
-    { rintro T ⟨hT, ⟨g⟩⟩,
-      suffices : ∀ x, f x = g x,
-      { refine set.ext (λ x, ⟨λ hx, _, _⟩),
-        { obtain ⟨y, hy⟩ := g.surjective ⟨x, hx⟩,
-          exact ⟨y, (this y).symm ▸ (congr_arg subtype.val hy : (g y : α) = x)⟩ },
-        { rintro ⟨y, rfl⟩,
-          exact (this y).symm ▸ ((g y).2 : (g y : α) ∈ T) } },
-      let g' : Y → α := λ x, (g x).1,
-      suffices hg'x : ∀ x, g' x ∈ (g' '' I x)ᶜ.least_elements,
-      { refine well_ordered_induction _ (λ x hx, _),
-        specialize hg'x x,
-        rw [(set.image_congr (λ y hy, (hx _ hy).symm) : g' '' I x = f '' I x)] at hg'x,
-        exact subsingleton_least_elements _ (hf x) hg'x },
-      refine λ x, ⟨_, _⟩,
-      { rintro ⟨z, ⟨hz, hz'⟩⟩,
-        suffices : g z = g x,
-        { obtain rfl := (order_iso.apply_eq_iff_eq _).1 this,
-          exact lt_irrefl _ hz },
-        exact subtype.ext hz' },
-      { rintros y hy,
-        contrapose! hy,
-        simp only [not_exists, exists_prop, set.mem_image, not_and, not_not, mem_I, set.mem_compl_eq, not_forall],
-        obtain ⟨z, hz⟩ := g.surjective ⟨y, hT _ (g x).2 _ hy⟩,
-        obtain rfl : g' z = y := congr_arg subtype.val hz,
-        exact ⟨z, ⟨g.lt_iff_lt.1 hy, rfl⟩⟩ } } },
+      exact lt_irrefl x (((hfi hz').symm ▸ hxy : x ≤ z).trans_lt hz) } },
   have : ∀ (x : Y) (f : I x → α) (h : strict_mono f ∧ initial_segment (set.range f)), (set.range f)ᶜ.nonempty,
   { rintros x f ⟨hf, hf'⟩, 
     suffices : ∀ z, f z ≤ z,
