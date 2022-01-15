@@ -278,15 +278,21 @@ end
 
 local notation a ` ≺ `:70 b:70 := isomorphic_to_initial_segment a b
 
+lemma exists_strict_mono [well_order α] [well_order β] (h : α ≺ β) :
+  ∃ (f : α → β), strict_mono f ∧ initial_segment (set.range f) :=
+begin
+  rcases h with ⟨S, hS, ⟨f⟩⟩,
+  refine ⟨subtype.val ∘ f, strict_mono.comp (λ x y, id) f.strict_mono, _⟩,
+  { simpa only [f.surjective.range_comp, subtype.range_val] using hS }
+end
+
 lemma mem_least_elements [well_order α] [well_order β] {S : set β} (hS : initial_segment S) (f : α ≃o S) (x : α) :
   (f x : β) ∈ ((subtype.val ∘ f) '' I x)ᶜ.least_elements :=
 begin
   refine ⟨_, _⟩,
   { rintro ⟨z, ⟨hz, hz'⟩⟩,
-    suffices : f z = f x,
-    { obtain rfl := (order_iso.apply_eq_iff_eq _).1 this,
-      exact lt_irrefl _ hz },
-    exact subtype.ext hz' },
+    obtain rfl := (order_iso.apply_eq_iff_eq _).1 (subtype.ext hz'),
+    exact lt_irrefl _ hz },
   { rintros y hy,
     contrapose! hy,
     simp only [set.mem_image, not_not, function.comp_app, mem_I, set.mem_compl_eq, subtype.val_eq_coe],
@@ -311,9 +317,10 @@ begin
   exact subsingleton_least_elements _ this (mem_least_elements hT g x)
 end
 
-theorem subset_collapse [well_order α] (Y : set α) : Y ≺ α :=
+lemma isomorphic_to_initial_of_range_nonempty [well_order α] [well_order β] (h : ∀ (x : α) (f : I x → β)
+  (hf : strict_mono f ∧ initial_segment (set.range f)), (set.range f)ᶜ.nonempty) : α ≺ β :=
 begin
-  suffices : ∃ f : Y → α, ∀ (x : Y), f x ∈ (f '' I x)ᶜ.least_elements,
+  suffices : ∃ f : α → β, ∀ (x : α), f x ∈ (f '' I x)ᶜ.least_elements,
   { rcases this with ⟨f, hf⟩,
     have hfi : function.injective f,
     { intros x y hxy,
@@ -329,21 +336,9 @@ begin
     { refine ⟨strict_mono.order_iso f (monotone.strict_mono_of_injective (λ x y hxy, (hf x).2 (f y) _) hfi)⟩,
       rintro ⟨z, ⟨hz, hz'⟩⟩,
       exact lt_irrefl x (((hfi hz').symm ▸ hxy : x ≤ z).trans_lt hz) } },
-  have : ∀ (x : Y) (f : I x → α) (h : strict_mono f ∧ initial_segment (set.range f)), (set.range f)ᶜ.nonempty,
-  { rintros x f ⟨hf, hf'⟩, 
-    suffices : ∀ z, f z ≤ z,
-    { refine ⟨x, _⟩,
-      rintro ⟨y, hy⟩,
-      exact ne_of_lt ((this _).trans_lt y.2) hy },
-    refine well_ordered_induction _ (λ z hz, _),
-    contrapose! hz,
-    obtain ⟨w, hw⟩ := hf' _ (set.mem_range_self _) _ hz,
-    refine ⟨w, hf.lt_iff_lt.1 (hw.symm ▸ hz), _⟩,
-    rw hw,
-    exact hf.lt_iff_lt.1 (hw.symm ▸ hz) },
-  by_cases hα : nonempty α,
-  { have : ∀ (x : Y) (f : I x → α) (h : strict_mono f ∧ initial_segment (set.range f)), (set.range f)ᶜ.least_elements.nonempty,
-    { exact λ x f h, nonempty_least_elements _ (this x f h) },
+  by_cases hβ : nonempty β,
+  { have : ∀ (x : α) (f : I x → β) (h : strict_mono f ∧ initial_segment (set.range f)), (set.range f)ᶜ.least_elements.nonempty,
+    { exact λ x f hf, nonempty_least_elements _ (h x f hf) },
     choose! G hG using this,
     obtain ⟨f, ⟨hf, -⟩⟩ := recursion G,
     have hf' : ∀ x, strict_mono (set.restrict f (I x)) ∧ initial_segment (set.range (set.restrict f (I x))),
@@ -356,8 +351,8 @@ begin
         have := not_imp_not.2 (h₂ w) (not_le.2 hw),
         simp only [not_exists, exists_prop, set.mem_image, set_coe.exists, not_and, not_not, set.range_restrict, mem_I,
           set.mem_compl_eq, not_forall] at this,
-        rcases this with ⟨q, hq, hq', rfl⟩,
-        refine ⟨⟨q, hq⟩, ⟨hq'.trans hy, rfl⟩⟩ },
+        rcases this with ⟨q, hq, rfl⟩,
+        refine ⟨q, ⟨hq.trans hy, rfl⟩⟩ },
       refine ⟨λ x y hxy, _, hf'⟩,
       simp only [set.restrict_apply],
       obtain ⟨h₁, h₂⟩ := hG _ _ (hz _ x.2),
@@ -379,9 +374,61 @@ begin
     rw hf,
     convert hG x (set.restrict f (I x)) (hf' _),
     simp only [set.range_restrict] },
-  { simp only [not_nonempty_iff] at hα,
+  { simp only [not_nonempty_iff] at hβ,
     resetI,
-    exact ⟨λ x, false.elim (is_empty.false x.1), λ x, false.elim (is_empty.false x.1)⟩ }
+    have : is_empty α,
+    { refine ⟨λ a', _⟩,
+      obtain ⟨a, -, ha⟩ := exists_min set.univ ⟨a', trivial⟩,
+      have := h a,
+      rw [(set.ext (λ x, ⟨λ hx, lt_irrefl a ((ha x trivial).trans_lt hx), false.elim⟩) : I a = ∅)] at this,
+      obtain ⟨b, -⟩ := this (λ x, false.elim x.2) ⟨λ x, false.elim x.2, λ b, false.elim (is_empty.false b)⟩,
+      exact is_empty.false b },
+    resetI,
+    exact ⟨λ x, false.elim (is_empty.false x), λ x, false.elim (is_empty.false x)⟩ }
+end
+
+theorem subset_collapse [well_order α] (Y : set α) : Y ≺ α :=
+begin
+  apply isomorphic_to_initial_of_range_nonempty,
+  rintros x f ⟨hf, hf'⟩, 
+  suffices : ∀ z, f z ≤ z,
+  { refine ⟨x, _⟩,
+    rintro ⟨y, hy⟩,
+    exact ne_of_lt ((this _).trans_lt y.2) hy },
+  refine well_ordered_induction _ (λ z hz, _),
+  contrapose! hz,
+  obtain ⟨w, hw⟩ := hf' _ (set.mem_range_self _) _ hz,
+  refine ⟨w, hf.lt_iff_lt.1 (hw.symm ▸ hz), _⟩,
+  rw hw,
+  exact hf.lt_iff_lt.1 (hw.symm ▸ hz)
+end
+
+theorem well_order_trichotomy [well_order α] [well_order β] : α ≺ β ∨ β ≺ α :=
+begin
+  by_cases h : ∀ (x : α) (f : I x → β) (hf : strict_mono f ∧ initial_segment (set.range f)), (set.range f)ᶜ.nonempty,
+  { exact or.inl (isomorphic_to_initial_of_range_nonempty h) },
+  { simp only [and_imp, exists_prop, not_forall, set.not_nonempty_iff_eq_empty, set.compl_empty_iff, set.range_iff_surjective] at h,
+    rcases h with ⟨x, f, hf₁, -, hf₃⟩,
+    exact or.inr ⟨I x, initial_segment_I _, ⟨(hf₁.order_iso_of_surjective _ hf₃).symm⟩⟩ }
+end
+
+lemma surjective_of_initial_segment_range [well_order α] (f : α → α) (hf : strict_mono f) (hf' : initial_segment (set.range f)) :
+  function.surjective f :=
+begin
+  obtain ⟨S, -, hS⟩ := subset_collapse_uniqueness (subset_collapse (set.univ : set α)),
+  obtain rfl : set.univ = S := hS _ ⟨initial_segment_univ, ⟨order_iso.refl _⟩⟩,
+  exact set.range_iff_surjective.1 (hS _ ⟨hf', ⟨order_iso.set.univ.trans (hf.order_iso _)⟩⟩)
+end
+
+theorem well_order_antisymm [well_order α] [well_order β] (hαβ : α ≺ β) (hβα : β ≺ α) : nonempty (α ≃o β) :=
+begin
+  obtain ⟨f, hf₁, hf₂⟩ := exists_strict_mono hαβ,
+  obtain ⟨g, hg₁, hg₂⟩ := exists_strict_mono hβα,
+  refine ⟨hf₁.order_iso_of_surjective _ (function.surjective.of_comp (surjective_of_initial_segment_range _ (hf₁.comp hg₁) _))⟩,
+  rw set.range_comp,
+  rintro z ⟨y, ⟨⟨x, rfl⟩, rfl⟩⟩ y hy,
+  obtain ⟨z, rfl⟩ := hf₂ _ ⟨g x, rfl⟩ _ hy,
+  exact ⟨z, hg₂ _ ⟨x, rfl⟩ _ (hf₁.lt_iff_lt.1 hy), rfl⟩
 end
 
 end subset_collapse
