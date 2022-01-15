@@ -8,11 +8,11 @@ import tactic
 open_locale classical
 noncomputable theory
 
-universes u v
+universes u v w
 
 namespace my
 
-variables {α : Type u} {β : Type v}
+variables {α : Type u} {β : Type v} {γ : Type w}
 
 section
 
@@ -124,6 +124,24 @@ by tidy
 
 lemma initial_segment_def [linear_order α] {Y : set α} (hY : initial_segment Y) {x y : α} (hx : x ∈ Y) (hy : y ≤ x) : y ∈ Y :=
 by { rcases eq_or_lt_of_le hy with (h|h), exacts [h.symm ▸ hx, hY _ hx _ h] }
+
+lemma initial_segment_of_image [linear_order α] [linear_order β] (S : set α) (f : α → β) (hf : strict_mono f)
+  (hfS : initial_segment (f '' S)) : initial_segment S :=
+begin
+  intros x hx y hxy,
+  obtain ⟨z, ⟨hz, hz'⟩⟩ := hfS (f x) ⟨x, hx, rfl⟩ (f y) (hf.lt_iff_lt.2 hxy),
+  obtain rfl := hf.injective hz',
+  exact hz
+end
+
+lemma initial_segment_of_order_iso [linear_order α] [linear_order β] (S : set α) (f : α ≃o β) :
+  initial_segment (f '' S) ↔ initial_segment S :=
+begin
+  refine ⟨initial_segment_of_image _ _ f.strict_mono, _⟩,
+  convert initial_segment_of_image (f '' S) _ f.symm.strict_mono,
+  rw order_iso.symm_image_image
+end
+
 
 lemma initial_segment_eq [well_order α] {S : set α} (hS : initial_segment S) : S = set.univ ∨ ∃ x, S = I x :=
 begin
@@ -276,14 +294,17 @@ def isomorphic_to_initial_segment [well_order α] [well_order β] : Prop :=
 
 end
 
-local notation a ` ≺ `:70 b:70 := isomorphic_to_initial_segment a b
+notation a ` ≺ `:70 b:70 := isomorphic_to_initial_segment a b
 
-lemma exists_strict_mono [well_order α] [well_order β] (h : α ≺ β) :
-  ∃ (f : α → β), strict_mono f ∧ initial_segment (set.range f) :=
+lemma iis_iff_exists_strict_mono [well_order α] [well_order β] :
+  α ≺ β ↔ ∃ (f : α → β), strict_mono f ∧ initial_segment (set.range f) :=
 begin
-  rcases h with ⟨S, hS, ⟨f⟩⟩,
-  refine ⟨subtype.val ∘ f, strict_mono.comp (λ x y, id) f.strict_mono, _⟩,
-  { simpa only [f.surjective.range_comp, subtype.range_val] using hS }
+  refine ⟨_, _⟩,
+  { rintro ⟨S, hS, ⟨f⟩⟩,
+    refine ⟨subtype.val ∘ f, strict_mono.comp (λ x y, id) f.strict_mono, _⟩,
+    { simpa only [f.surjective.range_comp, subtype.range_val] using hS } },
+  { rintro ⟨f, hf, hf'⟩,
+    exact ⟨set.range f, hf', ⟨hf.order_iso _⟩⟩ }
 end
 
 lemma mem_least_elements [well_order α] [well_order β] {S : set β} (hS : initial_segment S) (f : α ≃o S) (x : α) :
@@ -317,8 +338,8 @@ begin
   exact subsingleton_least_elements _ this (mem_least_elements hT g x)
 end
 
-lemma isomorphic_to_initial_of_range_nonempty [well_order α] [well_order β] (h : ∀ (x : α) (f : I x → β)
-  (hf : strict_mono f ∧ initial_segment (set.range f)), (set.range f)ᶜ.nonempty) : α ≺ β :=
+lemma isomorphic_to_initial_of_range_nonempty [well_order α] [well_order β]
+  (h : ∀ (x : α) (f : I x → β) (hf : strict_mono f ∧ initial_segment (set.range f)), (set.range f)ᶜ.nonempty) : α ≺ β :=
 begin
   suffices : ∃ f : α → β, ∀ (x : α), f x ∈ (f '' I x)ᶜ.least_elements,
   { rcases this with ⟨f, hf⟩,
@@ -383,8 +404,7 @@ begin
       rw [(set.ext (λ x, ⟨λ hx, lt_irrefl a ((ha x trivial).trans_lt hx), false.elim⟩) : I a = ∅)] at this,
       obtain ⟨b, -⟩ := this (λ x, false.elim x.2) ⟨λ x, false.elim x.2, λ b, false.elim (is_empty.false b)⟩,
       exact is_empty.false b },
-    resetI,
-    exact ⟨λ x, false.elim (is_empty.false x), λ x, false.elim (is_empty.false x)⟩ }
+    exactI ⟨λ x, false.elim (is_empty.false x), λ x, false.elim (is_empty.false x)⟩ }
 end
 
 theorem subset_collapse [well_order α] (Y : set α) : Y ≺ α :=
@@ -420,16 +440,21 @@ begin
   exact set.range_iff_surjective.1 (hS _ ⟨hf', ⟨order_iso.set.univ.trans (hf.order_iso _)⟩⟩)
 end
 
+theorem well_order_trans [well_order α] [well_order β] [well]
+
 theorem well_order_antisymm [well_order α] [well_order β] (hαβ : α ≺ β) (hβα : β ≺ α) : nonempty (α ≃o β) :=
 begin
-  obtain ⟨f, hf₁, hf₂⟩ := exists_strict_mono hαβ,
-  obtain ⟨g, hg₁, hg₂⟩ := exists_strict_mono hβα,
+  obtain ⟨f, hf₁, hf₂⟩ := iis_iff_exists_strict_mono.1 hαβ,
+  obtain ⟨g, hg₁, hg₂⟩ := iis_iff_exists_strict_mono.1 hβα,
   refine ⟨hf₁.order_iso_of_surjective _ (function.surjective.of_comp (surjective_of_initial_segment_range _ (hf₁.comp hg₁) _))⟩,
   rw set.range_comp,
   rintro z ⟨y, ⟨⟨x, rfl⟩, rfl⟩⟩ y hy,
   obtain ⟨z, rfl⟩ := hf₂ _ ⟨g x, rfl⟩ _ hy,
   exact ⟨z, hg₂ _ ⟨x, rfl⟩ _ (hf₁.lt_iff_lt.1 hy), rfl⟩
 end
+
+theorem well_order_refl [well_order α] : α ≺ α :=
+⟨set.univ, initial_segment_univ, ⟨order_iso.set.univ.symm⟩⟩
 
 end subset_collapse
 
