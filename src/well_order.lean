@@ -89,6 +89,9 @@ def J [has_le α] (x : α) : set α := { y | y ≤ x }
 @[simp] lemma mem_I [has_lt α] (x y : α) : x ∈ I y ↔ x < y := iff.rfl
 @[simp] lemma mem_J [has_le α] (x y : α) : x ∈ J y ↔ x ≤ y := iff.rfl
 
+lemma I_ne_univ [preorder α] (x : α) : I x ≠ set.univ :=
+λ h, lt_irrefl x $ (h.symm ▸ set.mem_univ x : x ∈ I x)
+
 lemma mem_J_iff [linear_order α] (x y : α) : x ∈ J y ↔ x = y ∨ x ∈ I y :=
 le_iff_eq_or_lt
 
@@ -141,7 +144,6 @@ begin
   convert initial_segment_of_image (f '' S) _ f.symm.strict_mono,
   rw order_iso.symm_image_image
 end
-
 
 lemma initial_segment_eq [well_order α] {S : set α} (hS : initial_segment S) : S = set.univ ∨ ∃ x, S = I x :=
 begin
@@ -228,7 +230,6 @@ begin
     exact attempt_well_defined _ _ _ (initial_segment_definition_set _ _ (hh _) _ y.2) (hh _) },
   { exact hh _ }
 end
-
 
 lemma exists_extend (x : α) (h : ∃ h' : attempt G, h'.definition_set = I x) : ∃ h : attempt G, h.definition_set = J x :=
 begin
@@ -423,13 +424,21 @@ begin
   exact hf.lt_iff_lt.1 (hw.symm ▸ hz)
 end
 
-theorem well_order_trichotomy [well_order α] [well_order β] : α ≺ β ∨ β ≺ α :=
+theorem well_order_total [well_order α] [well_order β] : α ≺ β ∨ β ≺ α :=
 begin
   by_cases h : ∀ (x : α) (f : I x → β) (hf : strict_mono f ∧ initial_segment (set.range f)), (set.range f)ᶜ.nonempty,
   { exact or.inl (isomorphic_to_initial_of_range_nonempty h) },
   { simp only [and_imp, exists_prop, not_forall, set.not_nonempty_iff_eq_empty, set.compl_empty_iff, set.range_iff_surjective] at h,
     rcases h with ⟨x, f, hf₁, -, hf₃⟩,
     exact or.inr ⟨I x, initial_segment_I _, ⟨(hf₁.order_iso_of_surjective _ hf₃).symm⟩⟩ }
+end
+
+lemma iis_self [well_order α] (S : set α) (hS : initial_segment S) : nonempty (α ≃o S) → S = set.univ :=
+begin
+  rintro ⟨f⟩,
+  obtain ⟨T, -, hT⟩ := subset_collapse_uniqueness (subset_collapse (set.univ : set α)),
+  obtain rfl : set.univ = T := hT _ ⟨initial_segment_univ, ⟨order_iso.refl _⟩⟩,
+  exact hT _ ⟨hS, ⟨order_iso.set.univ.trans f⟩⟩
 end
 
 lemma surjective_of_initial_segment_range [well_order α] (f : α → α) (hf : strict_mono f) (hf' : initial_segment (set.range f)) :
@@ -440,7 +449,17 @@ begin
   exact set.range_iff_surjective.1 (hS _ ⟨hf', ⟨order_iso.set.univ.trans (hf.order_iso _)⟩⟩)
 end
 
-theorem well_order_trans [well_order α] [well_order β] [well]
+theorem well_order_trans [well_order α] [well_order β] [well_order γ] (hαβ : α ≺ β) (hβγ : β ≺ γ) : α ≺ γ :=
+begin
+  simp only [iis_iff_exists_strict_mono] at *,
+  rcases hαβ with ⟨f, hf₁, hf₂⟩,
+  rcases hβγ with ⟨g, hg₁, hg₂⟩,
+  refine ⟨g ∘ f, hg₁.comp hf₁, _⟩,
+  rw set.range_comp,
+  rintro z ⟨y, ⟨⟨x, rfl⟩, rfl⟩⟩ y hy,
+  obtain ⟨z, rfl⟩ := hg₂ _ ⟨f x, rfl⟩ _ hy,
+  exact ⟨z, hf₂ _ ⟨x, rfl⟩ _ (hg₁.lt_iff_lt.1 hy), rfl⟩
+end
 
 theorem well_order_antisymm [well_order α] [well_order β] (hαβ : α ≺ β) (hβα : β ≺ α) : nonempty (α ≃o β) :=
 begin
