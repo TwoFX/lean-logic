@@ -111,6 +111,9 @@ begin
     exact hf.order_iso _ }
 end
 
+lemma small_initial_segment : ∀ (α : ordinal.{u}), small.{u} (I α) :=
+by { rintro ⟨α⟩, exact ⟨⟨α, ⟨(order_iso_I_order_type α).symm.to_equiv⟩⟩⟩ }
+
 instance well_order_ordinals : well_order ordinal.{u} :=
 { exists_min :=
   begin
@@ -129,13 +132,13 @@ instance well_order_ordinals : well_order ordinal.{u} :=
       { exact f.le_iff_le.1 (ha' (f ⟨ε, hε'⟩) ⟨⟨ε, hε'⟩, ⟨hε, rfl⟩⟩) },
       { exact le_of_lt (lt_of_lt_of_le hδ' (not_lt.1 hε')) } }
   end,
-  ..(infer_instance : linear_order ordinal.{u})}
+  ..(infer_instance : linear_order ordinal.{u}) }
 
-def well_order_transfer {α : Type u} {β : Type v} [well_order β] (f : α ≃ β) : well_order α :=
+def well_order.pullback {α : Type u} {β : Type v} [well_order β] (f : α → β) (hf : function.injective f) : well_order α :=
 { le := λ x y, f x ≤ f y,
   le_refl := λ x, le_refl _,
   le_trans := λ x y z, le_trans,
-  le_antisymm := λ x y hxy hyx, f.injective $ le_antisymm hxy hyx,
+  le_antisymm := λ x y hxy hyx, hf $ le_antisymm hxy hyx,
   le_total := λ x y, @le_total _ _ (f x) (f y),
   decidable_le := by apply_instance,
   decidable_eq := by apply_instance,
@@ -150,10 +153,53 @@ def well_order_transfer {α : Type u} {β : Type v} [well_order β] (f : α ≃ 
 theorem burali_forti : ¬small.{u} ordinal.{u} :=
 begin
   rintro ⟨α, ⟨f⟩⟩,
-  letI := well_order_transfer f.symm,
+  letI := well_order.pullback f.symm f.symm.injective,
   let g : ordinal.{u} ≃o α := f.to_order_iso (λ x y hxy, _) (λ x y, id),
   { exact I_ne_univ _ (iis_self (I (order_type α)) (initial_segment_I _) ⟨g.trans (order_iso_I_order_type α)⟩) },
   { rwa [←f.symm_apply_apply x, ←f.symm_apply_apply y] at hxy }
 end
+
+section supremum
+variables {J : Type u} (α : J → ordinal.{u})
+
+theorem exists_supremum : ∃ β : ordinal.{u}, (∀ i, α i ≤ β) ∧ ∀ γ, (∀ i, α i ≤ γ) → β ≤ γ :=
+begin
+  suffices : ∃ β' : ordinal.{u}, ∀ i, α i ≤ β',
+  { rcases this with ⟨β', hβ'⟩,
+    obtain ⟨β, hβ₁, hβ₂⟩ := exists_min { γ | ∀ i, α i ≤ γ } ⟨β', hβ'⟩,
+    exact ⟨β, hβ₁, hβ₂⟩ },
+  have : ∀ i, ∃ (γ : well_ordered_type.{u}), ⟦γ⟧ = α i := λ i, quotient.exists_rep _,
+  choose α' h using this,
+  let Α : Type u := Σ i, α' i,
+  letI setoid_Α : setoid Α := ⟨λ x y, (order_iso_I_order_type (α' x.1) x.2 : ordinal.{u}) = order_iso_I_order_type (α' y.1) y.2, _⟩,
+  { let Β : Type u := quotient setoid_Α,
+    let f : Β → ordinal.{u} := quotient.lift (λ (x : Α), (order_iso_I_order_type (α' x.1) x.2 : ordinal.{u})) (λ x y, id),
+    have hf : function.injective f,
+    { rintro ⟨x⟩ ⟨y⟩ hxy, 
+      exact quot.sound hxy },
+    letI : well_order Β := well_order.pullback f hf,
+    refine ⟨order_type Β, λ i, _⟩,
+    rw ←h,
+    change order_type (α' i) ≤ order_type Β,
+    rw [order_type_le_iff, iis_iff_exists_strict_mono],
+    refine ⟨λ x, ⟦⟨i, x⟩⟧, _, _⟩,
+    { rintro x y hxy,
+      change order_iso_I_order_type (α' i) x < order_iso_I_order_type (α' i) y,
+      rwa order_iso.lt_iff_lt },
+    { rintro x ⟨y, rfl⟩ ⟨z⟩ (hz : (order_iso_I_order_type (α' z.1) z.2 : ordinal.{u}) < order_iso_I_order_type (α' i) y),
+      let z' : I (order_type (α' i)) := ⟨order_iso_I_order_type (α' z.1) z.2, hz.trans (order_iso_I_order_type (α' i) y).2⟩,
+      refine ⟨(order_iso_I_order_type (α' i)).symm z', quot.sound _⟩,
+      simp only [order_iso.apply_symm_apply, subtype.coe_mk, setoid.r] } },
+  { refine ⟨_, _, _⟩,
+    { rintro ⟨x, hx⟩, constructor },
+    { rintro ⟨x, hx⟩ ⟨y, hy⟩ hxy,
+      exact hxy.symm },
+    { rintro ⟨x, hx⟩ ⟨y, hy⟩ ⟨z, hz⟩ hxy hyz,
+      exact hxy.trans hyz } }
+end
+
+end supremum
+
+
 
 end my

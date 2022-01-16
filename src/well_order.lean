@@ -90,7 +90,7 @@ def J [has_le α] (x : α) : set α := { y | y ≤ x }
 @[simp] lemma mem_J [has_le α] (x y : α) : x ∈ J y ↔ x ≤ y := iff.rfl
 
 lemma I_ne_univ [preorder α] (x : α) : I x ≠ set.univ :=
-λ h, lt_irrefl x $ (h.symm ▸ set.mem_univ x : x ∈ I x)
+λ h, lt_irrefl x (h.symm ▸ set.mem_univ x : x ∈ I x)
 
 lemma mem_J_iff [linear_order α] (x y : α) : x ∈ J y ↔ x = y ∨ x ∈ I y :=
 le_iff_eq_or_lt
