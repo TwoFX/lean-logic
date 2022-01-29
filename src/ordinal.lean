@@ -198,8 +198,44 @@ begin
       exact hxy.trans hyz } }
 end
 
+def supremum : ordinal.{u} := classical.some $ exists_supremum α
+lemma le_supremum : ∀ i, α i ≤ supremum α := (classical.some_spec $ exists_supremum α).1
+lemma supremum_le : ∀ γ, (∀ i, α i ≤ γ) → supremum α ≤ γ := (classical.some_spec $ exists_supremum α).2
+
 end supremum
 
+theorem hartog {α : Type u} : ∃ {β : well_ordered_type.{u}}, ¬∃ (f : β → α), function.injective f :=
+begin
+  let K := Σ (Y : set α), well_order Y,
+  let g : K → ordinal.{u} := λ Y, ⟦@well_ordered_type.mk Y.1 Y.2⟧,
+  have hg : initial_segment (set.range g),
+  { rintro x ⟨⟨y, hy⟩, rfl⟩ ⟨⟨z, well_order_z⟩⟩ hzy,
+    simp [g] at hzy,
+    resetI,
+    dsimp only at hzy,
+    obtain ⟨f, ⟨hf, ⟨q, hq⟩⟩⟩ := order_type_lt_iff.1 hzy,
+    let Z := set.range (subtype.val ∘ f),
+    have : function.injective (subtype.val ∘ f) := subtype.val_injective.comp hf.injective,
+    letI well_order_Z : well_order Z := well_order.pullback (equiv.of_injective _ this).symm (equiv.of_injective _ this).symm.injective,
+    refine ⟨⟨Z, well_order_Z⟩, order_type_eq_iff.2 ⟨equiv.to_order_iso (equiv.of_injective _ this).symm (λ a b, id) _⟩⟩,
+    rintros a b hab,
+    rwa [←(equiv.of_injective _ this).symm_apply_apply a, ←(equiv.of_injective _ this).symm_apply_apply b] at hab },
+  rcases initial_segment_eq hg with (h|⟨⟨x⟩, hx⟩),
+  { exact false.elim (burali_forti.{u} (small_of_surjective (set.range_iff_surjective.1 h))) },
+  { refine ⟨x, _⟩,
+    rintro ⟨f, hf⟩,
+    have hlt : ∀ (Y : set α) [well_order Y], by exactI order_type Y < order_type x,
+    { introsI Y hY,
+      have : order_type Y ∈ set.range g := ⟨⟨Y, hY⟩, rfl⟩,
+      simpa only [hx] using this },
+    have F : x ≃ set.range f := equiv.of_injective f hf,
+    letI : well_order (set.range f) := well_order.pullback F.symm F.symm.injective,
+    suffices h : nonempty (set.range f ≃o x),
+    { refine ne_of_lt (hlt (set.range f)) (quotient.sound h) },
+    refine ⟨F.symm.to_order_iso (λ a b, id) (λ a b hab, _)⟩,
+    simp only [equiv.symm_symm],
+    rwa [←F.symm_apply_apply a, ←F.symm_apply_apply b] at hab }
+end
 
 
 end my

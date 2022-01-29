@@ -1,0 +1,4 @@
+image: leanprovercommunity/mathlib:gitpod
+
+tasks:
+  - init: . /home/gitpod/.profile && leanpkg configure && leanproject get-mathlib-cache 
